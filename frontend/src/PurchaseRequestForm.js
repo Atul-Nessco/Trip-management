@@ -18,51 +18,82 @@ import {
 import axios from "axios";
 import { useTheme } from "@mui/material/styles";
 import CloseIcon from "@mui/icons-material/Close";
-const MeasurementSelector = ({ value, onChange, options }) => {
+
+const MeasurementSelector = ({ unit, setUnit, options }) => {
+  const [customUnit, setCustomUnit] = useState(unit);
+  const [isCustom, setIsCustom] = useState(unit === "");
+
+  const handleSelectChange = (event) => {
+    const selectedValue = event.target.value;
+    if (selectedValue !== "Others") {
+      setCustomUnit(selectedValue);
+      setUnit(selectedValue);
+      setIsCustom(false);
+    } else {
+      setCustomUnit("");
+      setUnit("");
+      setIsCustom(true);
+    }
+  };
+
+  const handleTextChange = (e) => {
+    setCustomUnit(e.target.value);
+    setUnit(e.target.value);
+  };
+
   return (
-    <Select
-      value={value}
-      onChange={onChange}
-      inputProps={{
-        id: "unit-selector",
-      }}
-      disableUnderline
-    >
-      {options.map((option, index) => (
-        <MenuItem key={index} value={option}>
-          {option}
-        </MenuItem>
-      ))}
-    </Select>
+    <Box display="flex" alignItems="center">
+      <Select
+        value={isCustom ? "Others" : customUnit}
+        onChange={handleSelectChange}
+        inputProps={{
+          id: "unit-selector",
+        }}
+        displayEmpty
+        disableUnderline
+      >
+        {options.map((option, index) => (
+          <MenuItem key={index} value={option}>
+            {option}
+          </MenuItem>
+        ))}
+      </Select>
+      {isCustom && (
+        <TextField
+          value={unit}
+          onChange={handleTextChange}
+          placeholder="Enter custom unit"
+          margin="dense"
+          style={{ marginLeft: 8 }}
+        />
+      )}
+    </Box>
   );
 };
 
 const PurchaseRequestForm = (props) => {
   const [unit, setUnit] = useState("kg");
-  const handleUnitChange = (event) => {
-    setUnit(event.target.value);
+  const handleUnitChange = (newUnit) => {
+    setUnit(newUnit);
   };
+
   const theme = useTheme();
   const [isDialogOpen, setIsDialogOpen] = useState(true);
   const [requestDate, setRequestDate] = useState("");
   const [trequestDate, settrequestedDate] = useState("");
   const [brand, setBrand] = useState("");
   const [purpose, setPurpose] = useState("");
+  const [quantity, setQuantity] = useState("");
   const [requesterName, setRequesterName] = useState("");
   const [departments, setDepartments] = useState([]);
   const [qualityGrades, setQualityGrades] = useState([]);
   const [unitsOfMeasurement, setUnitsOfMeasurement] = useState([]);
-  const [selectedUnitOfMeasurement, setSelectedUnitOfMeasurement] =
-    useState(null);
   const [priority, setPriority] = useState("");
   const [priorities, setPriorities] = useState([]);
   const [selectedQualityGrade, setSelectedQualityGrade] = useState(null);
   const [materialName, setMaterialName] = useState("");
   const [specification, setSpecification] = useState("");
   const [qualityRemarks, setQualityRemarks] = useState("");
-  const [countryOptions, setCountryOptions] = useState([]);
-  const [stateOptions, setStateOptions] = useState([]);
-  const [cityOptions, setCityOptions] = useState([]);
   const [selectedCountry, setSelectedCountry] = useState("");
   const [selectedState, setSelectedState] = useState("");
   const [selectedCity, setSelectedCity] = useState("");
@@ -70,7 +101,11 @@ const PurchaseRequestForm = (props) => {
   const [vendorName, setVendorName] = useState("");
   const [vendorPhoneNumber, setVendorPhoneNumber] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
+  const [remarks, setRemarks] = useState("");
 
+  const handleRemarksChange = (event) => {
+    setRemarks(event.target.value);
+  };
   const handleDateChange = (event) => {
     setSelectedDate(event.target.value);
   };
@@ -89,8 +124,6 @@ const PurchaseRequestForm = (props) => {
   const handleClearMaterialName = () => {
     setMaterialName("");
   };
-
-  const handleDialogSubmit = () => {};
 
   const handleCheckboxChange = (event) => {
     setIsVendorRecommended(event.target.checked);
@@ -111,9 +144,10 @@ const PurchaseRequestForm = (props) => {
         if (data && Array.isArray(data.data.UoM)) {
           // Assuming 'UM' is the key for units of measurement in the response
           setUnitsOfMeasurement(data.data.UoM);
-        } if (data && Array.isArray(data.data.Priority)) {
-            setPriorities(data.data.Priority);
-          }  else {
+        }
+        if (data && Array.isArray(data.data.Priority)) {
+          setPriorities(data.data.Priority);
+        } else {
           console.error(
             "Data structure is incorrect or one of the fields is empty:",
             data
@@ -124,6 +158,61 @@ const PurchaseRequestForm = (props) => {
         console.error("Error fetching data:", error);
       });
   }, []);
+  const [files, setFiles] = useState([]);
+
+  const handleImageChange = (e) => {
+    const selectedFiles = Array.from(e.target.files).map((file) => ({
+      preview: URL.createObjectURL(file),
+      data: file,
+      urls: [],
+      googleDriveFileId: null,
+    }));
+    setFiles((prevFiles) => [...prevFiles, ...selectedFiles]);
+  };
+
+  const handleDelete = (index) => {
+    setFiles((prevFiles) => prevFiles.filter((_, i) => i !== index));
+  };
+  const handleDialogSubmit = async (e) => {
+    e.preventDefault();
+    const formData = new FormData();
+    formData.append("requestDate", requestDate);
+    formData.append("trequestDate", trequestDate);
+    formData.append("brand", brand);
+    formData.append("purpose", purpose);
+    formData.append("requesterName", requesterName);
+    formData.append("department", selectedCity);
+    formData.append("materialName", materialName);
+    formData.append("specification", specification);
+    formData.append("qualityGrade", selectedQualityGrade);
+    formData.append("qualityRemarks", qualityRemarks);
+    formData.append("quantity", quantity);
+    formData.append("unit", unit);
+    formData.append("priority", priority);
+    formData.append("isVendorRecommended", isVendorRecommended);
+    formData.append("vendorName", vendorName);
+    formData.append("vendorPhoneNumber", vendorPhoneNumber);
+    formData.append("selectedDate", selectedDate);
+    files.forEach((file) => {
+      formData.append("files", file.data);
+    });
+    alert(JSON.stringify(formData));
+    try {
+      const response = await axios.post(
+        "http://localhost:8000/submit",
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+      console.log("Form submitted successfully:", response.data);
+      setIsDialogOpen(false); // Close the dialog on successful submission
+    } catch (error) {
+      console.error("Error submitting form:", error);
+    }
+  };
   return (
     <div>
       <Dialog fullWidth maxWidth="md" open={isDialogOpen}>
@@ -156,7 +245,7 @@ const PurchaseRequestForm = (props) => {
                       color: getColor(),
                     },
                     "& .MuiPickersBasePicker-pickerView": {
-                      width: "300px", // Adjust the width as needed
+                      width: "600px",
                     },
                   }}
                   fullWidth
@@ -365,36 +454,44 @@ const PurchaseRequestForm = (props) => {
               </Grid>
               <Grid item xs={12} sm={12}>
                 <Box>
-                  <TextField
-                    sx={{
-                      "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline":
-                        {
-                          borderColor: getColor(),
-                        },
-                      "& .MuiInputBase-input": {
-                        color: getColor(),
-                      },
-                      "& .MuiInputLabel-root": {
-                        color: getColor(),
-                      },
-                      "& .MuiInputLabel-root.Mui-focused": {
-                        color: getColor(),
-                      },
-                    }}
-                    style={{ display: "flex", alignItems: "center" }}
-                    id="outlined-basic"
-                    InputLabelProps={{ shrink: true }}
+                  <input
                     fullWidth
-                    label="Reference Image"
-                    variant="outlined"
+                    name="file"
+                    id="file"
                     type="file"
-                    inputProps={{
-                      multiple: true,
-                    }}
+                    multiple
+                    onChange={handleImageChange}
                   />
+                  <Grid container spacing={2} mt={2}>
+                    {files.map((file, index) => (
+                      <Grid item key={index}>
+                        <Box
+                          display="flex"
+                          flexDirection="column"
+                          alignItems="center"
+                        >
+                          <img
+                            src={file.preview}
+                            alt="preview"
+                            style={{
+                              width: "100px",
+                              height: "100px",
+                              marginBottom: "10px",
+                            }}
+                          />
+                          <Button
+                            variant="contained"
+                            color="secondary"
+                            onClick={() => handleDelete(index)}
+                          >
+                            Delete
+                          </Button>
+                        </Box>
+                      </Grid>
+                    ))}
+                  </Grid>
                 </Box>
               </Grid>
-
               <Grid item xs={12} sm={6}>
                 <Box display="flex" alignItems="center">
                   <TextField
@@ -415,10 +512,14 @@ const PurchaseRequestForm = (props) => {
                     }}
                     fullWidth
                     label="Quantity"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
                   />
                   <MeasurementSelector
                     value={unit}
-                    onChange={handleUnitChange}
+                    handleUnitChange={handleUnitChange}
+                    unit={unit}
+                    setUnit={setUnit}
                     options={unitsOfMeasurement}
                   />
                 </Box>
@@ -478,7 +579,7 @@ const PurchaseRequestForm = (props) => {
                 </Box>
               </Grid>
               <Grid item xs={12} sm={6}>
-              <Autocomplete
+                <Autocomplete
                   sx={{
                     "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline":
                       {
@@ -593,6 +694,8 @@ const PurchaseRequestForm = (props) => {
                   multiline
                   rows={4}
                   fullWidth
+                  value={remarks}
+                  onChange={handleRemarksChange}
                 />
               </Grid>
             </Grid>
