@@ -41,7 +41,7 @@ const multer = Multer({
     },
   }),
   limits: {
-    fileSize: 5 * 1024 * 1024,
+    fileSize: 5 * 10024 * 10024,
   },
 });
 
@@ -95,11 +95,13 @@ const formDataSchema = new mongoose.Schema(
     vendorName: String,
     vendorPhoneNumber: String,
     selectedDate: String,
+    remarks: String,
     driveLinks: [{ name: String, link: String }],
   },
   { timestamps: true }
 );
 const FormData = mongoose.model("FormData", formDataSchema);
+
 async function getNextSequenceValue(sequenceName) {
   const counter = await Counter.findByIdAndUpdate(
     sequenceName,
@@ -113,7 +115,8 @@ async function generatePlanId() {
   const sequenceValue = await getNextSequenceValue("planId");
   return `Pl-${String(sequenceValue).padStart(10, "0")}`;
 }
-const createGoogleDriveFolder = async (folderName, parentId, auth) => {
+
+const createGoogleDriveFolder = async (folderName, parentId) => {
   const fileMetadata = {
     name: folderName,
     mimeType: "application/vnd.google-apps.folder",
@@ -126,7 +129,7 @@ const createGoogleDriveFolder = async (folderName, parentId, auth) => {
   return response.data.id;
 };
 
-const findFolderByName = async (folderName, parentId, auth) => {
+const findFolderByName = async (folderName, parentId) => {
   const response = await driveService.files.list({
     q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`,
     fields: "files(id, name)",
@@ -135,7 +138,7 @@ const findFolderByName = async (folderName, parentId, auth) => {
   return response.data.files.length ? response.data.files[0].id : null;
 };
 
-const uploadToGoogleDrive = async (file, folderId, auth) => {
+const uploadToGoogleDrive = async (file, folderId) => {
   const fileMetadata = {
     name: file.originalname,
     parents: [folderId],
@@ -157,7 +160,6 @@ const uploadToGoogleDrive = async (file, folderId, auth) => {
   };
 };
 
-// Google Sheets Operations
 async function writeToSheet(data) {
   try {
     const response = await sheets.spreadsheets.values.get({
@@ -165,33 +167,46 @@ async function writeToSheet(data) {
       range: writeRange,
     });
 
-    const lastRowNumber = response.data.values
-      ? response.data.values.length + 1
-      : 2;
+    const lastRowNumber = response.data.values ? response.data.values.length + 1 : 2;
     const startRow = lastRowNumber;
     const endRow = startRow + 1;
     const range = `Sheet2!A${startRow}:Z${endRow}`;
 
-    let driveLinksString = data.driveLinks
-      .map((linkData) => `"${linkData.link}", "${linkData.name}"`)
-      .join(",\n");
-    const sheetData = {
-      ...data,
-      driveLinks: driveLinksString,
-    };
+    let driveLinksString = data.driveLinks.map((linkData) => `"${linkData.link}", "${linkData.name}"`).join(",\n");
+
+    const sheetData = [
+      data.planId,
+      data.requestDate,
+      data.trequestDate,
+      data.brand,
+      data.purpose,
+      data.requesterName,
+      data.department,
+      data.materialName,
+      data.specification,
+      data.qualityGrade,
+      data.qualityRemarks,
+      data.quantity,
+      data.unit,
+      data.priority,
+      data.isVendorRecommended,
+      data.vendorName,
+      data.vendorPhoneNumber,
+      data.selectedDate,
+      data.remarks,
+      driveLinksString,
+    ];
+
     const writeResponse = await sheets.spreadsheets.values.update({
       spreadsheetId,
       range,
       valueInputOption: "USER_ENTERED",
       resource: {
-        values: [Object.values(sheetData)],
+        values: [sheetData], // Use the array with `planId` as the first element
       },
     });
 
-    console.log(
-      "Data successfully written to Google Sheets:",
-      writeResponse.data
-    );
+    console.log("Data successfully written to Google Sheets:", writeResponse.data);
     return writeResponse.data;
   } catch (error) {
     console.error("Error writing data to Google Sheets:", error);
@@ -239,46 +254,46 @@ async function readSheet() {
 }
 
 async function addUnitOfMeasurementIfNeeded(unit) {
-    try {
-      const sheetData = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range: 'Sheet1!A1:Z1', // Fetch the header row
-      });
-  
-      const headers = sheetData.data.values[0];
-      const uomIndex = headers.indexOf('UoM');
-  
-      if (uomIndex === -1) {
-        console.error('UoM column not found in the sheet.');
-        return;
-      }
-  
-      const columnRange = `Sheet1!${String.fromCharCode(65 + uomIndex)}2:${String.fromCharCode(65 + uomIndex)}`;
-      const columnData = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range: columnRange,
-      });
-  
-      const existingUnits = columnData.data.values ? columnData.data.values.flat() : [];
-      if (!existingUnits.includes(unit)) {
-        const newRange = `Sheet1!${String.fromCharCode(65 + uomIndex)}${existingUnits.length + 2}`;
-        await sheets.spreadsheets.values.update({
-          spreadsheetId,
-          range: newRange,
-          valueInputOption: 'USER_ENTERED',
-          resource: {
-            values: [[unit]],
-          },
-        });
-        console.log(`Unit of measurement "${unit}" added to Google Sheets.`);
-      } else {
-        console.log(`Unit of measurement "${unit}" already exists.`);
-      }
-    } catch (error) {
-      console.error('Error adding unit of measurement to Google Sheets:', error);
-      throw error;
+  try {
+    const sheetData = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'Sheet1!A1:Z1', // Fetch the header row
+    });
+
+    const headers = sheetData.data.values[0];
+    const uomIndex = headers.indexOf('UoM');
+
+    if (uomIndex === -1) {
+      console.error('UoM column not found in the sheet.');
+      return;
     }
-  }  
+
+    const columnRange = `Sheet1!${String.fromCharCode(65 + uomIndex)}2:${String.fromCharCode(65 + uomIndex)}`;
+    const columnData = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: columnRange,
+    });
+
+    const existingUnits = columnData.data.values ? columnData.data.values.flat() : [];
+    if (!existingUnits.includes(unit)) {
+      const newRange = `Sheet1!${String.fromCharCode(65 + uomIndex)}${existingUnits.length + 2}`;
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: newRange,
+        valueInputOption: 'USER_ENTERED',
+        resource: {
+          values: [[unit]],
+        },
+      });
+      console.log(`Unit of measurement "${unit}" added to Google Sheets.`);
+    } else {
+      console.log(`Unit of measurement "${unit}" already exists.`);
+    }
+  } catch (error) {
+    console.error('Error adding unit of measurement to Google Sheets:', error);
+    throw error;
+  }
+}
 
 app.post("/submit", multer.array("files"), async (req, res) => {
   try {
@@ -288,24 +303,16 @@ app.post("/submit", multer.array("files"), async (req, res) => {
     const planId = await generatePlanId();
     formData.planId = planId;
     const parentFolderId = "10PvIYDvVVFWlqOrQIZyyck6Zt-5O0KFO";
-    const folderId = await createGoogleDriveFolder(
-      planId,
-      parentFolderId,
-      auth
-    );
+    const folderId = await createGoogleDriveFolder(planId, parentFolderId);
     const driveLinks = [];
     for (const file of req.files) {
-      const linkData = await uploadToGoogleDrive(file, folderId, auth);
+      const linkData = await uploadToGoogleDrive(file, folderId);
       driveLinks.push(linkData);
     }
     formData.driveLinks = driveLinks;
-    // await addUnitOfMeasurementIfNeeded(formData.unit);
     await writeToSheet(formData);
     await writeToMongo(formData);
-    res.status(200).json({
-      message: "Data successfully submitted to Google Sheets and MongoDB",
-      planId,
-    });
+    res.status(200).json({ folderId, driveLinks });
   } catch (error) {
     console.error("Error during /submit:", error);
     res.status(500).json({ error: "Failed to submit data" });
@@ -320,6 +327,23 @@ app.get("/data", async (req, res) => {
   } catch (error) {
     console.error("Error fetching data from Google Sheets:", error);
     res.status(500).json({ error: "Failed to fetch data" });
+  }
+});
+
+app.delete("/delete-file-from-google-drive/:fileId", async (req, res) => {
+  try {
+    const fileId = req.params.fileId;
+    if (!fileId) {
+      res.status(400).send("File ID is required.");
+      return;
+    }
+    await driveService.files.delete({
+      fileId: fileId,
+    });
+    res.status(200).send("File deleted from Google Drive successfully.");
+  } catch (err) {
+    console.error("Error during file deletion:", err);
+    res.status(500).send("An error occurred while deleting the file from Google Drive.");
   }
 });
 

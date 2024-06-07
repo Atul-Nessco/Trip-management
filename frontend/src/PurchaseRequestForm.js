@@ -18,6 +18,19 @@ import {
 import axios from "axios";
 import { useTheme } from "@mui/material/styles";
 import CloseIcon from "@mui/icons-material/Close";
+import VisibilitySharpIcon from "@mui/icons-material/VisibilitySharp";
+import LinearProgress from "@mui/material/LinearProgress";
+import ClearSharpIcon from "@mui/icons-material/ClearSharp";
+import PropTypes from "prop-types";
+import Typography from "@mui/material/Typography";
+
+function LinearProgressBar() {
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", width: "100%" }}>
+      <LinearProgress sx={{ width: "100%" }} />
+    </Box>
+  );
+}
 
 const MeasurementSelector = ({ unit, setUnit, options }) => {
   const [customUnit, setCustomUnit] = useState(unit);
@@ -70,13 +83,11 @@ const MeasurementSelector = ({ unit, setUnit, options }) => {
     </Box>
   );
 };
-
 const PurchaseRequestForm = (props) => {
   const [unit, setUnit] = useState("kg");
   const handleUnitChange = (newUnit) => {
     setUnit(newUnit);
   };
-
   const theme = useTheme();
   const [isDialogOpen, setIsDialogOpen] = useState(true);
   const [requestDate, setRequestDate] = useState("");
@@ -102,19 +113,12 @@ const PurchaseRequestForm = (props) => {
   const [vendorPhoneNumber, setVendorPhoneNumber] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
   const [remarks, setRemarks] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState([]);
+  const [deleting, setDeleting] = useState(false);
 
   const handleRemarksChange = (event) => {
     setRemarks(event.target.value);
-  };
-  const handleDateChange = (event) => {
-    setSelectedDate(event.target.value);
-  };
-  const handleCountryChange = (event, value) => {
-    setSelectedCountry(value);
-  };
-
-  const handleStateChange = (event, value) => {
-    setSelectedState(value);
   };
 
   const handleCityChange = (event, value) => {
@@ -148,30 +152,56 @@ const PurchaseRequestForm = (props) => {
         if (data && Array.isArray(data.data.Priority)) {
           setPriorities(data.data.Priority);
         } else {
-          console.error(
+          console.log(
             "Data structure is incorrect or one of the fields is empty:",
             data
           );
         }
       })
       .catch((error) => {
-        console.error("Error fetching data:", error);
+        console.log("Error fetching data:", error);
       });
   }, []);
   const [files, setFiles] = useState([]);
-
-  const handleImageChange = (e) => {
+  const handleFileChange = (e) => {
     const selectedFiles = Array.from(e.target.files).map((file) => ({
       preview: URL.createObjectURL(file),
       data: file,
-      urls: [],
+      type: file.type,
       googleDriveFileId: null,
     }));
     setFiles((prevFiles) => [...prevFiles, ...selectedFiles]);
+    setUploadProgress((prevProgress) => [
+      ...prevProgress,
+      ...selectedFiles.map(() => 0),
+    ]);
   };
-
-  const handleDelete = (index) => {
-    setFiles((prevFiles) => prevFiles.filter((_, i) => i !== index));
+  const [urls, setUrls] = useState([]);
+  const handleDelete = async (index) => {
+    const fileToDelete = files[index];
+    const fileId = fileToDelete.googleDriveFileId;
+    if (!fileId) {
+      setFiles(files.filter((_, i) => i !== index));
+      return;
+    }
+    try {
+      const response = await fetch(
+        `http://localhost:8000/delete-file-from-google-drive/${String(fileId)}`,
+        {
+          method: "DELETE",
+        }
+      );
+      if (!response.ok) {
+        console.log("Failed to delete file:", response.statusText);
+        setDeleting(false);
+        return;
+      }
+      setFiles(files.filter((_, i) => i !== index));
+    } catch (error) {
+      console.log("Error occurred during file deletion:", error);
+    } finally {
+      setDeleting(false);
+    }
   };
   const handleDialogSubmit = async (e) => {
     e.preventDefault();
@@ -193,25 +223,43 @@ const PurchaseRequestForm = (props) => {
     formData.append("vendorName", vendorName);
     formData.append("vendorPhoneNumber", vendorPhoneNumber);
     formData.append("selectedDate", selectedDate);
+    formData.append("remarks", remarks);
+
     files.forEach((file) => {
       formData.append("files", file.data);
     });
-    alert(JSON.stringify(formData));
+    setUploading(true);
     try {
       const response = await axios.post(
         "http://localhost:8000/submit",
         formData,
         {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
+          headers: { "Content-Type": "multipart/form-data" },
         }
       );
-      console.log("Form submitted successfully:", response.data);
-      setIsDialogOpen(false); // Close the dialog on successful submission
+
+      if (response && response.data && response.data.driveLinks) {
+        const driveLinks = response.data.driveLinks;
+        setFiles((prevFiles) =>
+          prevFiles.map((file, index) => ({
+            ...file,
+            googleDriveFileId: driveLinks[index].link.split("=")[1],
+          }))
+        );
+      } else {
+        console.log("Unexpected response format:", response.data);
+      }
+      console.log("Files uploaded successfully");
     } catch (error) {
-      console.error("Error submitting form:", error);
+      console.log("Error occurred during file upload:", error);
+    } finally {
+      setUploading(false);
     }
+  };
+
+  const handlePreview = (fileId) => {
+    const driveUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
+    window.open(driveUrl, "_blank");
   };
   return (
     <div>
@@ -454,44 +502,167 @@ const PurchaseRequestForm = (props) => {
               </Grid>
               <Grid item xs={12} sm={12}>
                 <Box>
-                  <input
+                  <TextField
+                    sx={{
+                      "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline":
+                        {
+                          borderColor: "black",
+                        },
+                      "& .MuiInputBase-input": {
+                        color: "black",
+                      },
+                      "& .MuiInputLabel-root": {
+                        color: "black",
+                      },
+                      "& .MuiInputLabel-root.Mui-focused": {
+                        color: "black",
+                      },
+                    }}
                     fullWidth
                     name="file"
                     id="file"
                     type="file"
-                    multiple
-                    onChange={handleImageChange}
+                    inputProps={{ multiple: true }} // Set multiple attribute
+                    onChange={handleFileChange}
                   />
-                  <Grid container spacing={2} mt={2}>
+                  <Grid container spacing={4} mt={2}>
                     {files.map((file, index) => (
                       <Grid item key={index}>
                         <Box
-                          display="flex"
-                          flexDirection="column"
-                          alignItems="center"
+                          position="relative" // Add this to make positioning relative
+                          display="inline-block" // Added to contain image and button
                         >
-                          <img
-                            src={file.preview}
-                            alt="preview"
-                            style={{
-                              width: "100px",
-                              height: "100px",
-                              marginBottom: "10px",
-                            }}
-                          />
-                          <Button
-                            variant="contained"
-                            color="secondary"
-                            onClick={() => handleDelete(index)}
-                          >
-                            Delete
-                          </Button>
+                          {file.type.startsWith("image/") && (
+                            <img
+                              src={file.preview}
+                              alt={`File Preview ${index + 1}`}
+                              style={{
+                                maxWidth: "100px",
+                                minHeight: "100px",
+                                display: "flex",
+                                flexDirection: "column",
+                                justifyContent: "space-between",
+                                height: "100px",
+                                padding: "5px",
+                                paddingBottom: "25px",
+                                border: "1px solid rgba(255, 255, 255, .25)",
+                                borderRadius: "20px",
+                                backgroundColor: "rgba(255, 255, 255, 0.45)",
+                                boxShadow: "0 0 10px 1px rgba(0, 0, 0, 0.25)",
+                                backdropFilter: "blur(15px)",
+                              }}
+                            />
+                          )}
+                          {file.type.startsWith("video/") && (
+                            <video
+                              src={file.preview}
+                              controls
+                              style={{
+                                maxWidth: "100px",
+                                minHeight: "100px",
+                                display: "flex",
+                                flexDirection: "column",
+                                justifyContent: "space-between",
+                                height: "100px",
+                                padding: "5px",
+                                paddingBottom: "25px",
+                                border: "1px solid rgba(255, 255, 255, .25)",
+                                borderRadius: "20px",
+                                backgroundColor: "rgba(255, 255, 255, 0.45)",
+                                boxShadow: "0 0 10px 1px rgba(0, 0, 0, 0.25)",
+                                backdropFilter: "blur(15px)",
+                              }}
+                            />
+                          )}
+                          {file.type === "application/pdf" && (
+                            <embed
+                              src={file.preview}
+                              type="application/pdf"
+                              style={{
+                                maxWidth: "100px",
+                                minHeight: "100px",
+                                display: "flex",
+                                flexDirection: "column",
+                                justifyContent: "space-between",
+                                height: "100px",
+                                padding: "5px",
+                                paddingBottom: "25px",
+                                border: "1px solid rgba(255, 255, 255, .25)",
+                                borderRadius: "20px",
+                                backgroundColor: "rgba(255, 255, 255, 0.45)",
+                                boxShadow: "0 0 10px 1px rgba(0, 0, 0, 0.25)",
+                                backdropFilter: "blur(15px)",
+                              }}
+                            />
+                          )}
+                          {(uploading || deleting) && (
+                            <Box
+                              sx={{
+                                display: "flex",
+                                marginTop: "-20px",
+                                alignItems: "center",
+                                width: "100%",
+                              }}
+                            >
+                              <LinearProgress
+                                sx={{
+                                  width: "100%",
+                                  height: "10px",
+                                  borderRadius: "20px",
+                                }}
+                              />
+                            </Box>
+                          )}
+                          {uploading ? null : (
+                            <Button
+                              variant="contained"
+                              disableRipple
+                              onClick={() => handleDelete(index)}
+                              style={{
+                                position: "absolute",
+                                background: "transparent",
+                                border: "none",
+                                boxShadow: "none",
+                                padding: 0,
+                                zIndex: 1,
+                                bottom: "2px",
+                                left: "-10px",
+                                color: "black",
+                              }}
+                            >
+                              <ClearSharpIcon />
+                            </Button>
+                          )}
+
+                          {file.googleDriveFileId && (
+                            <Button
+                              variant="contained"
+                              disableRipple
+                              onClick={() =>
+                                handlePreview(file.googleDriveFileId)
+                              }
+                              style={{
+                                position: "absolute",
+                                background: "transparent",
+                                border: "none",
+                                boxShadow: "none",
+                                padding: 0,
+                                zIndex: 1,
+                                bottom: "2px",
+                                right: "-10px",
+                                color: "black",
+                              }}
+                            >
+                              <VisibilitySharpIcon />
+                            </Button>
+                          )}
                         </Box>
                       </Grid>
                     ))}
                   </Grid>
                 </Box>
               </Grid>
+
               <Grid item xs={12} sm={6}>
                 <Box display="flex" alignItems="center">
                   <TextField
