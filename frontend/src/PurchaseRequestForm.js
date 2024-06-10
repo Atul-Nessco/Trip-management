@@ -14,6 +14,7 @@ import {
   Checkbox,
   Select,
   MenuItem,
+  Tooltip,
 } from "@mui/material";
 import axios from "axios";
 import { useTheme } from "@mui/material/styles";
@@ -31,11 +32,9 @@ function LinearProgressBar() {
     </Box>
   );
 }
-
 const MeasurementSelector = ({ unit, setUnit, options }) => {
   const [customUnit, setCustomUnit] = useState(unit);
   const [isCustom, setIsCustom] = useState(unit === "");
-
   const handleSelectChange = (event) => {
     const selectedValue = event.target.value;
     if (selectedValue !== "Others") {
@@ -48,12 +47,10 @@ const MeasurementSelector = ({ unit, setUnit, options }) => {
       setIsCustom(true);
     }
   };
-
   const handleTextChange = (e) => {
     setCustomUnit(e.target.value);
     setUnit(e.target.value);
   };
-
   return (
     <Box display="flex" alignItems="center">
       <Select
@@ -114,6 +111,7 @@ const PurchaseRequestForm = (props) => {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState([]);
   const [deleting, setDeleting] = useState(false);
+  const [tooltipText, setTooltipText] = useState("Copy link");
 
   const handleRemarksChange = (event) => {
     setRemarks(event.target.value);
@@ -131,8 +129,7 @@ const PurchaseRequestForm = (props) => {
     setIsVendorRecommended(event.target.checked);
   };
 
-  const getColor = () => (theme.palette.mode === "dark" ? "white" : "black");
-
+  const getColor = () => (theme.palette.mode === "dark" ? "whte" : "black");
   useEffect(() => {
     axios
       .get("http://localhost:8000/data")
@@ -145,6 +142,7 @@ const PurchaseRequestForm = (props) => {
           setQualityGrades(data.data.QD);
         }
         if (data && Array.isArray(data.data.UoM)) {
+          // Assuming 'UM' is the key for units of measurement in the response
           setUnitsOfMeasurement(data.data.UoM);
         }
         if (data && Array.isArray(data.data.Priority)) {
@@ -160,7 +158,6 @@ const PurchaseRequestForm = (props) => {
         console.log("Error fetching data:", error);
       });
   }, []);
-
   const [files, setFiles] = useState([]);
   const handleFileChange = (e) => {
     const selectedFiles = Array.from(e.target.files).map((file) => ({
@@ -183,7 +180,9 @@ const PurchaseRequestForm = (props) => {
     try {
       const response = await fetch(
         `http://localhost:8000/delete-file-from-google-drive/${String(fileId)}`,
-        { method: "DELETE" }
+        {
+          method: "DELETE",
+        }
       );
       if (!response.ok) {
         console.log("Failed to delete file:", response.statusText);
@@ -197,7 +196,6 @@ const PurchaseRequestForm = (props) => {
       setDeleting(false);
     }
   };
-
   const handleDialogSubmit = async (e) => {
     e.preventDefault();
     const formData = new FormData();
@@ -232,17 +230,13 @@ const PurchaseRequestForm = (props) => {
         {
           headers: { "Content-Type": "multipart/form-data" },
           onUploadProgress: (progressEvent) => {
-            const totalLength = progressEvent.lengthComputable
-              ? progressEvent.total
-              : 1;
-            const progress = Math.round(
-              (progressEvent.loaded * 100) / totalLength
+            const { loaded, total } = progressEvent;
+            const totalFilesSize = files.reduce(
+              (acc, file) => acc + file.data.size,
+              0
             );
-            setUploadProgress((prevProgress) =>
-              prevProgress.map((prog, index) =>
-                index === files.length - 1 ? progress : prog
-              )
-            );
+            const progress = Math.round((loaded / totalFilesSize) * 100);
+            setUploadProgress(progress);
           },
         }
       );
@@ -273,18 +267,20 @@ const PurchaseRequestForm = (props) => {
 
   const handleCopyLink = (fileId) => {
     const driveUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
-    navigator.clipboard.writeText(driveUrl).then(() => {
-      console.log("Link copied to clipboard");
-    });
-  };
-
-  const calculateOverallProgress = () => {
-    if (uploadProgress.length === 0) return 0;
-    const totalProgress = uploadProgress.reduce(
-      (total, progress) => total + progress,
-      0
-    );
-    return totalProgress / uploadProgress.length;
+    navigator.clipboard
+      .writeText(driveUrl)
+      .then(() => {
+        setTooltipText("Link copied!");
+        setTimeout(() => {
+          setTooltipText("Copy link");
+        }, 2000);
+      })
+      .catch(() => {
+        setTooltipText("Failed to copy");
+        setTimeout(() => {
+          setTooltipText("Copy link");
+        }, 2000);
+      });
   };
 
   return (
@@ -620,87 +616,127 @@ const PurchaseRequestForm = (props) => {
                               />
                             )}
                             {!uploading && (
-                              <Button
-                                variant="contained"
-                                disableRipple
-                                onClick={() => handleDelete(index)}
-                                style={{
-                                  position: "absolute",
-                                  background: "transparent",
-                                  border: "none",
-                                  boxShadow: "none",
-                                  padding: 0,
-                                  zIndex: 1,
-                                  bottom: "2px",
-                                  left: "-10px",
-                                  color: "black",
-                                }}
-                              >
-                                <ClearSharpIcon />
-                              </Button>
+                             <Tooltip title="Delete" arrow>
+                             <Button
+                               variant="contained"
+                               disableRipple
+                               onClick={() => handleDelete(index)}
+                               style={{
+                                 position: "absolute",
+                                 background: "transparent",
+                                 border: "none",
+                                 boxShadow: "none",
+                                 padding: 0,
+                                 zIndex: 1,
+                                 bottom: "2px",
+                                 left: "-10px",
+                                 color: "black",
+                               }}
+                             >
+                               <ClearSharpIcon style={{ color: "#ff7e5f" }} />
+                             </Button>
+                           </Tooltip>
                             )}
                             {file.googleDriveFileId && (
                               <>
-                                <Button
-                                  variant="contained"
-                                  disableRipple
-                                  onClick={() =>
-                                    handlePreview(file.googleDriveFileId)
-                                  }
-                                  style={{
-                                    position: "absolute",
-                                    background: "transparent",
-                                    border: "none",
-                                    boxShadow: "none",
-                                    padding: 0,
-                                    zIndex: 1,
-                                    bottom: "2px",
-                                    right: "30px",
-                                    color: "black",
-                                  }}
-                                >
-                                  <VisibilitySharpIcon />
-                                </Button>
-                                <Button
-                                  variant="contained"
-                                  disableRipple
-                                  onClick={() =>
-                                    handleCopyLink(file.googleDriveFileId)
-                                  }
-                                  style={{
-                                    position: "absolute",
-                                    background: "transparent",
-                                    border: "none",
-                                    boxShadow: "none",
-                                    padding: 0,
-                                    zIndex: 1,
-                                    bottom: "2px",
-                                    right: "-10px",
-                                    color: "black",
-                                  }}
-                                >
-                                  <FileCopyIcon />
-                                </Button>
+                                <Tooltip arrow title="Preview">
+                                  <Button
+                                    variant="contained"
+                                    disableRipple
+                                    onClick={() =>
+                                      handlePreview(file.googleDriveFileId)
+                                    }
+                                    style={{
+                                      position: "absolute",
+                                      background: "transparent",
+                                      border: "none",
+                                      boxShadow: "none",
+                                      padding: 0,
+                                      zIndex: 1,
+                                      bottom: "2px",
+                                      right: "30px",
+                                      color: "black",
+                                    }}
+                                  >
+                                    <VisibilitySharpIcon />
+                                  </Button>
+                                </Tooltip>
+
+                                <Tooltip arrow title={tooltipText}>
+                                  <Button
+                                  size="small"
+                                    variant="contained"
+                                    disableRipple
+                                    onClick={() =>
+                                      handleCopyLink(file.googleDriveFileId)
+                                    }
+                                    style={{
+                                      position: "absolute",
+                                      background: "transparent",
+                                      border: "none",
+                                      boxShadow: "none",
+                                      padding: 0,
+                                      zIndex: 1,
+                                      bottom: "2px",
+                                      right: "-10px",
+                                      color: "black",
+                                    }}
+                                  >
+                                    <FileCopyIcon />
+                                  </Button>
+                                </Tooltip>
                               </>
                             )}
                           </Box>
                         </Grid>
                       ))}
                     </Grid>
-                    {(uploading || deleting) && (
+                    {uploading && (
                       <Box sx={{ width: "100%", marginTop: 2 }}>
                         <LinearProgress
                           variant="determinate"
-                          value={calculateOverallProgress()}
+                          value={uploadProgress}
                         />
                         <Box sx={{ minWidth: 35 }}>
                           <Typography variant="body2" color="text.secondary">
-                            {`${Math.round(calculateOverallProgress())}%`}
+                            {`${Math.round(uploadProgress)}%`}
                           </Typography>
                         </Box>
                       </Box>
                     )}
                   </form>
+                </Box>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Box display="flex" alignItems="center">
+                  <TextField
+                    sx={{
+                      "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline":
+                        {
+                          borderColor: getColor(),
+                        },
+                      "& .MuiInputBase-input": {
+                        color: getColor(),
+                      },
+                      "& .MuiInputLabel-root": {
+                        color: getColor(),
+                      },
+                      "& .MuiInputLabel-root.Mui-focused": {
+                        color: getColor(),
+                      },
+                    }}
+                    fullWidth
+                    label="Quantity"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                  />
+                  <MeasurementSelector
+                    value={unit}
+                    handleUnitChange={handleUnitChange}
+                    unit={unit}
+                    setUnit={setUnit}
+                    options={unitsOfMeasurement}
+                  />
                 </Box>
               </Grid>
               <Grid item xs={12} sm={6}>
