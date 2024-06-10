@@ -21,7 +21,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import VisibilitySharpIcon from "@mui/icons-material/VisibilitySharp";
 import LinearProgress from "@mui/material/LinearProgress";
 import ClearSharpIcon from "@mui/icons-material/ClearSharp";
-import PropTypes from "prop-types";
+import FileCopyIcon from "@mui/icons-material/FileCopy";
 import Typography from "@mui/material/Typography";
 
 function LinearProgressBar() {
@@ -105,8 +105,6 @@ const PurchaseRequestForm = (props) => {
   const [materialName, setMaterialName] = useState("");
   const [specification, setSpecification] = useState("");
   const [qualityRemarks, setQualityRemarks] = useState("");
-  const [selectedCountry, setSelectedCountry] = useState("");
-  const [selectedState, setSelectedState] = useState("");
   const [selectedCity, setSelectedCity] = useState("");
   const [isVendorRecommended, setIsVendorRecommended] = useState(false);
   const [vendorName, setVendorName] = useState("");
@@ -133,7 +131,8 @@ const PurchaseRequestForm = (props) => {
     setIsVendorRecommended(event.target.checked);
   };
 
-  const getColor = () => (theme.palette.mode === "dark" ? "whte" : "black");
+  const getColor = () => (theme.palette.mode === "dark" ? "white" : "black");
+
   useEffect(() => {
     axios
       .get("http://localhost:8000/data")
@@ -146,7 +145,6 @@ const PurchaseRequestForm = (props) => {
           setQualityGrades(data.data.QD);
         }
         if (data && Array.isArray(data.data.UoM)) {
-          // Assuming 'UM' is the key for units of measurement in the response
           setUnitsOfMeasurement(data.data.UoM);
         }
         if (data && Array.isArray(data.data.Priority)) {
@@ -162,19 +160,17 @@ const PurchaseRequestForm = (props) => {
         console.log("Error fetching data:", error);
       });
   }, []);
+
   const [files, setFiles] = useState([]);
   const handleFileChange = (e) => {
     const selectedFiles = Array.from(e.target.files).map((file) => ({
-      preview: URL.createObjectURL(file),
       data: file,
+      preview: URL.createObjectURL(file),
       type: file.type,
-      googleDriveFileId: null,
+      progress: 0,
     }));
-    setFiles((prevFiles) => [...prevFiles, ...selectedFiles]);
-    setUploadProgress((prevProgress) => [
-      ...prevProgress,
-      ...selectedFiles.map(() => 0),
-    ]);
+    setFiles(selectedFiles);
+    setUploadProgress(Array(selectedFiles.length).fill(0));
   };
   const [urls, setUrls] = useState([]);
   const handleDelete = async (index) => {
@@ -187,9 +183,7 @@ const PurchaseRequestForm = (props) => {
     try {
       const response = await fetch(
         `http://localhost:8000/delete-file-from-google-drive/${String(fileId)}`,
-        {
-          method: "DELETE",
-        }
+        { method: "DELETE" }
       );
       if (!response.ok) {
         console.log("Failed to delete file:", response.statusText);
@@ -203,6 +197,7 @@ const PurchaseRequestForm = (props) => {
       setDeleting(false);
     }
   };
+
   const handleDialogSubmit = async (e) => {
     e.preventDefault();
     const formData = new FormData();
@@ -228,6 +223,7 @@ const PurchaseRequestForm = (props) => {
     files.forEach((file) => {
       formData.append("files", file.data);
     });
+
     setUploading(true);
     try {
       const response = await axios.post(
@@ -235,6 +231,19 @@ const PurchaseRequestForm = (props) => {
         formData,
         {
           headers: { "Content-Type": "multipart/form-data" },
+          onUploadProgress: (progressEvent) => {
+            const totalLength = progressEvent.lengthComputable
+              ? progressEvent.total
+              : 1;
+            const progress = Math.round(
+              (progressEvent.loaded * 100) / totalLength
+            );
+            setUploadProgress((prevProgress) =>
+              prevProgress.map((prog, index) =>
+                index === files.length - 1 ? progress : prog
+              )
+            );
+          },
         }
       );
 
@@ -261,6 +270,23 @@ const PurchaseRequestForm = (props) => {
     const driveUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
     window.open(driveUrl, "_blank");
   };
+
+  const handleCopyLink = (fileId) => {
+    const driveUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
+    navigator.clipboard.writeText(driveUrl).then(() => {
+      console.log("Link copied to clipboard");
+    });
+  };
+
+  const calculateOverallProgress = () => {
+    if (uploadProgress.length === 0) return 0;
+    const totalProgress = uploadProgress.reduce(
+      (total, progress) => total + progress,
+      0
+    );
+    return totalProgress / uploadProgress.length;
+  };
+
   return (
     <div>
       <Dialog fullWidth maxWidth="md" open={isDialogOpen}>
@@ -502,197 +528,179 @@ const PurchaseRequestForm = (props) => {
               </Grid>
               <Grid item xs={12} sm={12}>
                 <Box>
-                  <TextField
-                    sx={{
-                      "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline":
-                        {
-                          borderColor: "black",
+                  <form onSubmit={handleDialogSubmit}>
+                    <TextField
+                      sx={{
+                        "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline":
+                          {
+                            borderColor: "black",
+                          },
+                        "& .MuiInputBase-input": {
+                          color: "black",
                         },
-                      "& .MuiInputBase-input": {
-                        color: "black",
-                      },
-                      "& .MuiInputLabel-root": {
-                        color: "black",
-                      },
-                      "& .MuiInputLabel-root.Mui-focused": {
-                        color: "black",
-                      },
-                    }}
-                    fullWidth
-                    name="file"
-                    id="file"
-                    type="file"
-                    inputProps={{ multiple: true }} // Set multiple attribute
-                    onChange={handleFileChange}
-                  />
-                  <Grid container spacing={4} mt={2}>
-                    {files.map((file, index) => (
-                      <Grid item key={index}>
-                        <Box
-                          position="relative" // Add this to make positioning relative
-                          display="inline-block" // Added to contain image and button
-                        >
-                          {file.type.startsWith("image/") && (
-                            <img
-                              src={file.preview}
-                              alt={`File Preview ${index + 1}`}
-                              style={{
-                                maxWidth: "100px",
-                                minHeight: "100px",
-                                display: "flex",
-                                flexDirection: "column",
-                                justifyContent: "space-between",
-                                height: "100px",
-                                padding: "5px",
-                                paddingBottom: "25px",
-                                border: "1px solid rgba(255, 255, 255, .25)",
-                                borderRadius: "20px",
-                                backgroundColor: "rgba(255, 255, 255, 0.45)",
-                                boxShadow: "0 0 10px 1px rgba(0, 0, 0, 0.25)",
-                                backdropFilter: "blur(15px)",
-                              }}
-                            />
-                          )}
-                          {file.type.startsWith("video/") && (
-                            <video
-                              src={file.preview}
-                              controls
-                              style={{
-                                maxWidth: "100px",
-                                minHeight: "100px",
-                                display: "flex",
-                                flexDirection: "column",
-                                justifyContent: "space-between",
-                                height: "100px",
-                                padding: "5px",
-                                paddingBottom: "25px",
-                                border: "1px solid rgba(255, 255, 255, .25)",
-                                borderRadius: "20px",
-                                backgroundColor: "rgba(255, 255, 255, 0.45)",
-                                boxShadow: "0 0 10px 1px rgba(0, 0, 0, 0.25)",
-                                backdropFilter: "blur(15px)",
-                              }}
-                            />
-                          )}
-                          {file.type === "application/pdf" && (
-                            <embed
-                              src={file.preview}
-                              type="application/pdf"
-                              style={{
-                                maxWidth: "100px",
-                                minHeight: "100px",
-                                display: "flex",
-                                flexDirection: "column",
-                                justifyContent: "space-between",
-                                height: "100px",
-                                padding: "5px",
-                                paddingBottom: "25px",
-                                border: "1px solid rgba(255, 255, 255, .25)",
-                                borderRadius: "20px",
-                                backgroundColor: "rgba(255, 255, 255, 0.45)",
-                                boxShadow: "0 0 10px 1px rgba(0, 0, 0, 0.25)",
-                                backdropFilter: "blur(15px)",
-                              }}
-                            />
-                          )}
-                          {(uploading || deleting) && (
-                            <Box
-                              sx={{
-                                display: "flex",
-                                marginTop: "-20px",
-                                alignItems: "center",
-                                width: "100%",
-                              }}
-                            >
-                              <LinearProgress
-                                sx={{
-                                  width: "100%",
-                                  height: "10px",
+                        "& .MuiInputLabel-root": {
+                          color: "black",
+                        },
+                        "& .MuiInputLabel-root.Mui-focused": {
+                          color: "black",
+                        },
+                      }}
+                      fullWidth
+                      name="file"
+                      id="file"
+                      type="file"
+                      inputProps={{ multiple: true }} // Set multiple attribute
+                      onChange={handleFileChange}
+                    />
+                    <Grid container spacing={4} mt={2}>
+                      {files.map((file, index) => (
+                        <Grid item key={index}>
+                          <Box position="relative" display="inline-block">
+                            {file.type.startsWith("image/") && (
+                              <img
+                                src={file.preview}
+                                alt={`File Preview ${index + 1}`}
+                                style={{
+                                  maxWidth: "100px",
+                                  minHeight: "100px",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  justifyContent: "space-between",
+                                  height: "100px",
+                                  padding: "5px",
+                                  paddingBottom: "25px",
+                                  border: "1px solid rgba(255, 255, 255, .25)",
                                   borderRadius: "20px",
+                                  backgroundColor: "rgba(255, 255, 255, 0.45)",
+                                  boxShadow: "0 0 10px 1px rgba(0, 0, 0, 0.25)",
+                                  backdropFilter: "blur(15px)",
                                 }}
                               />
-                            </Box>
-                          )}
-                          {uploading ? null : (
-                            <Button
-                              variant="contained"
-                              disableRipple
-                              onClick={() => handleDelete(index)}
-                              style={{
-                                position: "absolute",
-                                background: "transparent",
-                                border: "none",
-                                boxShadow: "none",
-                                padding: 0,
-                                zIndex: 1,
-                                bottom: "2px",
-                                left: "-10px",
-                                color: "black",
-                              }}
-                            >
-                              <ClearSharpIcon />
-                            </Button>
-                          )}
-
-                          {file.googleDriveFileId && (
-                            <Button
-                              variant="contained"
-                              disableRipple
-                              onClick={() =>
-                                handlePreview(file.googleDriveFileId)
-                              }
-                              style={{
-                                position: "absolute",
-                                background: "transparent",
-                                border: "none",
-                                boxShadow: "none",
-                                padding: 0,
-                                zIndex: 1,
-                                bottom: "2px",
-                                right: "-10px",
-                                color: "black",
-                              }}
-                            >
-                              <VisibilitySharpIcon />
-                            </Button>
-                          )}
+                            )}
+                            {file.type.startsWith("video/") && (
+                              <video
+                                src={file.preview}
+                                controls
+                                style={{
+                                  maxWidth: "100px",
+                                  minHeight: "100px",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  justifyContent: "space-between",
+                                  height: "100px",
+                                  padding: "5px",
+                                  paddingBottom: "25px",
+                                  border: "1px solid rgba(255, 255, 255, .25)",
+                                  borderRadius: "20px",
+                                  backgroundColor: "rgba(255, 255, 255, 0.45)",
+                                  boxShadow: "0 0 10px 1px rgba(0, 0, 0, 0.25)",
+                                  backdropFilter: "blur(15px)",
+                                }}
+                              />
+                            )}
+                            {file.type === "application/pdf" && (
+                              <embed
+                                src={file.preview}
+                                type="application/pdf"
+                                style={{
+                                  maxWidth: "100px",
+                                  minHeight: "100px",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  justifyContent: "space-between",
+                                  height: "100px",
+                                  padding: "5px",
+                                  paddingBottom: "25px",
+                                  border: "1px solid rgba(255, 255, 255, .25)",
+                                  borderRadius: "20px",
+                                  backgroundColor: "rgba(255, 255, 255, 0.45)",
+                                  boxShadow: "0 0 10px 1px rgba(0, 0, 0, 0.25)",
+                                  backdropFilter: "blur(15px)",
+                                }}
+                              />
+                            )}
+                            {!uploading && (
+                              <Button
+                                variant="contained"
+                                disableRipple
+                                onClick={() => handleDelete(index)}
+                                style={{
+                                  position: "absolute",
+                                  background: "transparent",
+                                  border: "none",
+                                  boxShadow: "none",
+                                  padding: 0,
+                                  zIndex: 1,
+                                  bottom: "2px",
+                                  left: "-10px",
+                                  color: "black",
+                                }}
+                              >
+                                <ClearSharpIcon />
+                              </Button>
+                            )}
+                            {file.googleDriveFileId && (
+                              <>
+                                <Button
+                                  variant="contained"
+                                  disableRipple
+                                  onClick={() =>
+                                    handlePreview(file.googleDriveFileId)
+                                  }
+                                  style={{
+                                    position: "absolute",
+                                    background: "transparent",
+                                    border: "none",
+                                    boxShadow: "none",
+                                    padding: 0,
+                                    zIndex: 1,
+                                    bottom: "2px",
+                                    right: "30px",
+                                    color: "black",
+                                  }}
+                                >
+                                  <VisibilitySharpIcon />
+                                </Button>
+                                <Button
+                                  variant="contained"
+                                  disableRipple
+                                  onClick={() =>
+                                    handleCopyLink(file.googleDriveFileId)
+                                  }
+                                  style={{
+                                    position: "absolute",
+                                    background: "transparent",
+                                    border: "none",
+                                    boxShadow: "none",
+                                    padding: 0,
+                                    zIndex: 1,
+                                    bottom: "2px",
+                                    right: "-10px",
+                                    color: "black",
+                                  }}
+                                >
+                                  <FileCopyIcon />
+                                </Button>
+                              </>
+                            )}
+                          </Box>
+                        </Grid>
+                      ))}
+                    </Grid>
+                    {(uploading || deleting) && (
+                      <Box sx={{ width: "100%", marginTop: 2 }}>
+                        <LinearProgress
+                          variant="determinate"
+                          value={calculateOverallProgress()}
+                        />
+                        <Box sx={{ minWidth: 35 }}>
+                          <Typography variant="body2" color="text.secondary">
+                            {`${Math.round(calculateOverallProgress())}%`}
+                          </Typography>
                         </Box>
-                      </Grid>
-                    ))}
-                  </Grid>
-                </Box>
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <Box display="flex" alignItems="center">
-                  <TextField
-                    sx={{
-                      "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline":
-                        {
-                          borderColor: getColor(),
-                        },
-                      "& .MuiInputBase-input": {
-                        color: getColor(),
-                      },
-                      "& .MuiInputLabel-root": {
-                        color: getColor(),
-                      },
-                      "& .MuiInputLabel-root.Mui-focused": {
-                        color: getColor(),
-                      },
-                    }}
-                    fullWidth
-                    label="Quantity"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                  />
-                  <MeasurementSelector
-                    value={unit}
-                    handleUnitChange={handleUnitChange}
-                    unit={unit}
-                    setUnit={setUnit}
-                    options={unitsOfMeasurement}
-                  />
+                      </Box>
+                    )}
+                  </form>
                 </Box>
               </Grid>
               <Grid item xs={12} sm={6}>
