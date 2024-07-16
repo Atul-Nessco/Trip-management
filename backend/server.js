@@ -17,7 +17,7 @@ const __dirname = path.dirname(__filename);
 
 app.use(
   cors({
-    origin: "http://localhost:3001",
+    origin: "http://nesscoindustries.com",
     credentials: true,
     optionsSuccessStatus: 204,
   })
