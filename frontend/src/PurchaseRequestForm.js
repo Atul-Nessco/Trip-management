@@ -132,7 +132,7 @@ const PurchaseRequestForm = (props) => {
   const getColor = () => (theme.palette.mode === "dark" ? "whte" : "black");
   useEffect(() => {
     axios
-      .get("http://localhost:8000/data")
+      .get("http://api.nesscoindustries.com/data")
       .then((response) => {
         const { data } = response;
         if (data && Array.isArray(data.data.RD)) {
@@ -179,7 +179,7 @@ const PurchaseRequestForm = (props) => {
     }
     try {
       const response = await fetch(
-        `http://localhost:8000/delete-file-from-google-drive/${String(fileId)}`,
+        `http://api.nesscoindustries.com/delete-file-from-google-drive/${String(fileId)}`,
         {
           method: "DELETE",
         }
@@ -225,7 +225,7 @@ const PurchaseRequestForm = (props) => {
     setUploading(true);
     try {
       const response = await axios.post(
-        "http://localhost:8000/submit",
+        "http://api.nesscoindustries.com/submit",
         formData,
         {
           headers: { "Content-Type": "multipart/form-data" },
