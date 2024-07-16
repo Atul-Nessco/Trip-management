@@ -319,10 +319,21 @@ app.post("/submit", multer.array("files"), async (req, res) => {
   }
 });
 
+// app.get("/data", async (req, res) => {
+//   try {
+//     const data = await readSheet();
+//     console.log("Data fetched from Google Sheets:", data);
+//     res.status(200).json({ data });
+//   } catch (error) {
+//     console.error("Error fetching data from Google Sheets:", error);
+//     res.status(500).json({ error: "Failed to fetch data" });
+//   }
+// });
+
 app.get("/data", async (req, res) => {
   try {
-    const data = await readSheet();
-    console.log("Data fetched from Google Sheets:", data);
+    // const data = await readSheet();
+    console.log("Data fetched from Google Sheets:");
     res.status(200).json({ data });
   } catch (error) {
     console.error("Error fetching data from Google Sheets:", error);
