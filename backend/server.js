@@ -228,15 +228,19 @@ async function writeToMongo(data) {
 
 async function readSheet() {
   try {
+    console.log(`Fetching data from spreadsheet ID: ${spreadsheetId}, range: ${readRange}`);
+    
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
       range: readRange,
     });
+
     const rows = response.data.values;
     if (!rows || rows.length === 0) {
       console.log("No data found.");
       return [];
     }
+
     const headers = rows[0];
     const columnData = {};
     headers.forEach((header, colIndex) => {
@@ -246,12 +250,14 @@ async function readSheet() {
         .filter((cell) => cell !== undefined && cell !== "" && cell !== null);
     });
 
+    console.log("Column data:", columnData);
     return columnData;
   } catch (error) {
     console.error("Error fetching data from Google Sheets:", error);
     throw error;
   }
 }
+
 
 async function addUnitOfMeasurementIfNeeded(unit) {
   try {
