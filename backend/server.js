@@ -57,9 +57,29 @@ const auth = new google.auth.GoogleAuth({
 
 const driveService = google.drive({ version: "v3", auth });
 const sheets = google.sheets({ version: "v4", auth });
-const spreadsheetId = process.env.SPREADSHEET_ID;
-const writeRange = process.env.SPREADSHEET_WRITE_RANGE || "Sheet2!A1:Z";
-const readRange = process.env.SPREADSHEET_READ_RANGE || "Sheet1!A:Z";
+
+async function testGoogleSheetsAPI() {
+  try {
+    const spreadsheetId = process.env.SPREADSHEET_ID;
+    const readRange = process.env.SPREADSHEET_READ_RANGE || "Sheet1!A:Z";
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: readRange,
+    });
+
+    const rows = response.data.values;
+    if (!rows || rows.length === 0) {
+      console.log("No data found.");
+    } else {
+      console.log("Data from Google Sheets:", rows);
+    }
+  } catch (error) {
+    console.error("Error fetching data from Google Sheets:", error.response?.data || error.message);
+  }
+}
+
+testGoogleSheetsAPI();
 
 // MongoDB Connection
 const mongoUri = process.env.MONGO_URI;
@@ -163,8 +183,8 @@ const uploadToGoogleDrive = async (file, folderId) => {
 async function writeToSheet(data) {
   try {
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: writeRange,
+      spreadsheetId: process.env.SPREADSHEET_ID,
+      range: process.env.SPREADSHEET_WRITE_RANGE || "Sheet2!A1:Z",
     });
 
     const lastRowNumber = response.data.values ? response.data.values.length + 1 : 2;
@@ -198,7 +218,7 @@ async function writeToSheet(data) {
     ];
 
     const writeResponse = await sheets.spreadsheets.values.update({
-      spreadsheetId,
+      spreadsheetId: process.env.SPREADSHEET_ID,
       range,
       valueInputOption: "USER_ENTERED",
       resource: {
@@ -209,7 +229,7 @@ async function writeToSheet(data) {
     console.log("Data successfully written to Google Sheets:", writeResponse.data);
     return writeResponse.data;
   } catch (error) {
-    console.error("Error writing data to Google Sheets:", error);
+    console.error("Error writing data to Google Sheets:", error.response?.data || error.message);
     throw error;
   }
 }
@@ -221,13 +241,16 @@ async function writeToMongo(data) {
     console.log("Data successfully written to MongoDB:", result);
     return result;
   } catch (error) {
-    console.error("Error writing data to MongoDB:", error);
+    console.error("Error writing data to MongoDB:", error.message);
     throw error;
   }
 }
 
 async function readSheet() {
   try {
+    const spreadsheetId = process.env.SPREADSHEET_ID;
+    const readRange = process.env.SPREADSHEET_READ_RANGE || "Sheet1!A:Z";
+    
     console.log(`Fetching data from spreadsheet ID: ${spreadsheetId}, range: ${readRange}`);
     
     const response = await sheets.spreadsheets.values.get({
@@ -253,14 +276,14 @@ async function readSheet() {
     console.log("Column data:", columnData);
     return columnData;
   } catch (error) {
-    console.error("Error fetching data from Google Sheets:", error);
+    console.error("Error fetching data from Google Sheets:", error.response?.data || error.message);
     throw error;
   }
 }
 
-
 async function addUnitOfMeasurementIfNeeded(unit) {
   try {
+    const spreadsheetId = process.env.SPREADSHEET_ID;
     const sheetData = await sheets.spreadsheets.values.get({
       spreadsheetId,
       range: 'Sheet1!A1:Z1', // Fetch the header row
@@ -296,7 +319,7 @@ async function addUnitOfMeasurementIfNeeded(unit) {
       console.log(`Unit of measurement "${unit}" already exists.`);
     }
   } catch (error) {
-    console.error('Error adding unit of measurement to Google Sheets:', error);
+    console.error('Error adding unit of measurement to Google Sheets:', error.response?.data || error.message);
     throw error;
   }
 }
@@ -320,7 +343,7 @@ app.post("/submit", multer.array("files"), async (req, res) => {
     await writeToMongo(formData);
     res.status(200).json({ folderId, driveLinks });
   } catch (error) {
-    console.error("Error during /submit:", error);
+    console.error("Error during /submit:", error.response?.data || error.message);
     res.status(500).json({ error: "Failed to submit data" });
   }
 });
@@ -331,12 +354,10 @@ app.get("/data", async (req, res) => {
     console.log("Data fetched from Google Sheets:", data);
     res.status(200).json({ data });
   } catch (error) {
-    console.error("Error fetching data from Google Sheets:", error);
+    console.error("Error fetching data from Google Sheets:", error.response?.data || error.message);
     res.status(500).json({ error: "Failed to fetch data" });
   }
 });
-
-
 
 app.delete("/delete-file-from-google-drive/:fileId", async (req, res) => {
   try {
@@ -350,7 +371,7 @@ app.delete("/delete-file-from-google-drive/:fileId", async (req, res) => {
     });
     res.status(200).send("File deleted from Google Drive successfully.");
   } catch (err) {
-    console.error("Error during file deletion:", err);
+    console.error("Error during file deletion:", err.response?.data || err.message);
     res.status(500).send("An error occurred while deleting the file from Google Drive.");
   }
 });
